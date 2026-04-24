@@ -96,10 +96,18 @@ func (r *ArgoCD) Render(ctx context.Context, app discover.Doc, ref string) ([]by
 }
 
 func (r *ArgoCD) env() []string {
-	if r.Opts.KubeconfigPath == "" {
-		return nil
+	var env []string
+	if r.Opts.KubeconfigPath != "" {
+		env = append(env, "KUBECONFIG="+r.Opts.KubeconfigPath)
 	}
-	return []string{"KUBECONFIG=" + r.Opts.KubeconfigPath}
+	// ARGOCD_NAMESPACE is read by the argocd CLI in --core mode to locate
+	// argocd-cm and other config objects. Without it, the CLI looks in the
+	// kubeconfig's current-context namespace (typically "default") and
+	// errors with "configmap 'argocd-cm' not found".
+	if r.Opts.ArgoCDNamespace != "" {
+		env = append(env, "ARGOCD_NAMESPACE="+r.Opts.ArgoCDNamespace)
+	}
+	return env
 }
 
 // patchApp produces the YAML applied to the cluster: the app's spec is kept

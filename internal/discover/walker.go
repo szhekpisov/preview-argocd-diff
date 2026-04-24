@@ -79,9 +79,11 @@ func Walk(root string, opts Options) ([]Doc, error) {
 }
 
 func shouldSkipDir(rel, name string, patterns []string) bool {
-	// Always skip version control and dotfiles that never hold CRDs.
+	// Always skip version control, dotfiles, and Helm-chart template
+	// directories. Files under templates/ contain Go template syntax
+	// that doesn't round-trip through a YAML parser.
 	switch name {
-	case ".git", ".github", "node_modules":
+	case ".git", ".github", "node_modules", "templates":
 		return true
 	}
 	for _, p := range patterns {
@@ -120,6 +122,11 @@ func decodeFile(abs, rel string) ([]Doc, error) {
 	// sigs.k8s.io/yaml doesn't expose a streaming multi-doc decoder, so we
 	// split on document separators ourselves. This matches how kubectl reads
 	// manifests.
+	//
+	// Per-document parse failures are silently tolerated: a single bad doc
+	// in a file (or a file that happens to have a .yaml extension but isn't
+	// actually YAML, e.g. a Helm template snippet caught by a weak path
+	// filter) should never block discovery of valid Applications elsewhere.
 	var docs []Doc
 	for _, chunk := range splitYAMLDocs(raw) {
 		trimmed := bytes.TrimSpace(chunk)
@@ -129,7 +136,7 @@ func decodeFile(abs, rel string) ([]Doc, error) {
 
 		var head metaHeader
 		if err := yaml.Unmarshal(trimmed, &head); err != nil {
-			return nil, fmt.Errorf("parse %s: %w", rel, err)
+			continue
 		}
 
 		// List: recurse into its items.
@@ -137,7 +144,7 @@ func decodeFile(abs, rel string) ([]Doc, error) {
 			for _, item := range head.Items {
 				sub, err := decodeDoc(item, rel)
 				if err != nil {
-					return nil, err
+					continue
 				}
 				if sub != nil {
 					docs = append(docs, *sub)
@@ -148,7 +155,7 @@ func decodeFile(abs, rel string) ([]Doc, error) {
 
 		doc, err := decodeDoc(trimmed, rel)
 		if err != nil {
-			return nil, err
+			continue
 		}
 		if doc != nil {
 			docs = append(docs, *doc)
