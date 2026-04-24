@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # Builder — compiles the Go binary.
-FROM golang:1.23-bookworm AS builder
+FROM golang:1.24-bookworm AS builder
 WORKDIR /src
 
 COPY go.mod go.sum ./
