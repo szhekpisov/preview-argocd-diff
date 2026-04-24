@@ -1,3 +1,5 @@
+// Command preview-argocd-diff renders the diff of ArgoCD Applications
+// affected by a pull request and posts the result as a comment on the PR.
 package main
 
 import (

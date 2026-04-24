@@ -29,9 +29,11 @@ func (f *fakeRunner) Run(_ context.Context, c cluster.Command) (cluster.Result, 
 
 type noopCluster struct{}
 
-func (noopCluster) Ensure(context.Context) error              { return nil }
-func (noopCluster) Teardown(context.Context) error            { return nil }
-func (noopCluster) Kubeconfig(context.Context) ([]byte, error) { return []byte("apiVersion: v1\nkind: Config"), nil }
+func (noopCluster) Ensure(context.Context) error   { return nil }
+func (noopCluster) Teardown(context.Context) error { return nil }
+func (noopCluster) Kubeconfig(context.Context) ([]byte, error) {
+	return []byte("apiVersion: v1\nkind: Config"), nil
+}
 
 type noopArgoCD struct{}
 

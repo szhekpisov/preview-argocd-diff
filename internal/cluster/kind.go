@@ -8,10 +8,10 @@ import (
 
 // KindOptions configures the Kind cluster.
 type KindOptions struct {
-	Name       string // cluster name, passed to `kind --name`
-	NodeImage  string // optional; e.g. kindest/node:v1.29.2
+	Name          string // cluster name, passed to `kind --name`
+	NodeImage     string // optional; e.g. kindest/node:v1.29.2
 	ReuseIfExists bool
-	KeepOnExit bool
+	KeepOnExit    bool
 }
 
 // Kind is a Manager that drives the `kind` CLI.

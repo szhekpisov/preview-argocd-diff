@@ -102,7 +102,7 @@ func Run(ctx context.Context, cfg *config.Config, deps Deps) error {
 	if err != nil {
 		return err
 	}
-	defer os.RemoveAll(workDir)
+	defer func() { _ = os.RemoveAll(workDir) }()
 
 	baseDir := filepath.Join(workDir, "base")
 	headDir := filepath.Join(workDir, "head")
@@ -205,22 +205,22 @@ func Run(ctx context.Context, cfg *config.Config, deps Deps) error {
 
 		var baseOut, headOut []byte
 		if c.Base != nil {
-			if b, err := renderer.Render(ctx, *c.Base, baseHash.String()); err != nil {
+			b, err := renderer.Render(ctx, *c.Base, baseHash.String())
+			if err != nil {
 				cr.RenderErr = "render base: " + err.Error()
 				reports = append(reports, cr)
 				continue
-			} else {
-				baseOut = b
 			}
+			baseOut = b
 		}
 		if c.Head != nil {
-			if h, err := renderer.Render(ctx, *c.Head, headHash.String()); err != nil {
+			h, err := renderer.Render(ctx, *c.Head, headHash.String())
+			if err != nil {
 				cr.RenderErr = "render head: " + err.Error()
 				reports = append(reports, cr)
 				continue
-			} else {
-				headOut = h
 			}
+			headOut = h
 		}
 
 		d, err := deps.DifferImpl.Diff(ctx, c.Key.Name, baseOut, headOut)

@@ -6,6 +6,7 @@ package discover
 // Kind identifies the CRD variant of a discovered document.
 type Kind string
 
+// Supported CRD kinds.
 const (
 	KindApplication    Kind = "Application"
 	KindApplicationSet Kind = "ApplicationSet"

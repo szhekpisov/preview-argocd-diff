@@ -118,7 +118,7 @@ func (r *Repo) Materialize(ref plumbing.Hash, dst string) error {
 		if err != nil {
 			return fmt.Errorf("open %s: %w", f.Name, err)
 		}
-		defer rc.Close()
+		defer func() { _ = rc.Close() }()
 
 		mode, err := f.Mode.ToOSFileMode()
 		if err != nil {
@@ -129,7 +129,7 @@ func (r *Repo) Materialize(ref plumbing.Hash, dst string) error {
 			return err
 		}
 		if _, err := copyReader(out, rc); err != nil {
-			out.Close()
+			_ = out.Close()
 			return err
 		}
 		return out.Close()

@@ -24,10 +24,10 @@ type Runner interface {
 // Command describes one external invocation. Stdout and stderr are captured;
 // Stdin may be nil.
 type Command struct {
-	Name string
-	Args []string
-	Env  []string // appended to the current environment
-	Dir  string
+	Name  string
+	Args  []string
+	Env   []string // appended to the current environment
+	Dir   string
 	Stdin io.Reader
 }
 

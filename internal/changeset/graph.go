@@ -24,6 +24,7 @@ import (
 // Status classifies an app's presence across the two trees.
 type Status string
 
+// The three possible Status values.
 const (
 	StatusAdded    Status = "added"
 	StatusRemoved  Status = "removed"
@@ -251,4 +252,3 @@ func dedup(in []string) []string {
 	}
 	return out
 }
-
