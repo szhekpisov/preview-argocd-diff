@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-mock-config
+  labels:
+    app.kubernetes.io/name: {{ .Chart.Name }}
+data:
+  image: {{ printf "%s:%s" .Values.image.repository .Values.image.tag | quote }}
+  replicas: {{ .Values.replicas | quote }}

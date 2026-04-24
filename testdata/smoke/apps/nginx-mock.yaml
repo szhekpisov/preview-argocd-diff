@@ -1,0 +1,14 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: nginx-mock
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/szhekpisov/preview-argocd-diff.git
+    path: testdata/smoke/charts/nginx-mock
+    targetRevision: HEAD
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
