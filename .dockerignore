@@ -1,0 +1,11 @@
+.git
+.github
+.claude
+bin/
+dist/
+output/
+*.md
+*.test
+*.out
+coverage.txt
+.DS_Store
