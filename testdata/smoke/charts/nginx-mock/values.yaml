@@ -1,4 +1,4 @@
 image:
   repository: nginx
-  tag: "1.25"
-replicas: 2
+  tag: "1.26"
+replicas: 3
