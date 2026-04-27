@@ -26,13 +26,14 @@ import (
 // Deps bundles the overridable collaborators. Leaving a field nil requests
 // the default production implementation.
 type Deps struct {
-	Runner       cluster.Runner
-	DifferImpl   differ.Differ
-	VCSImpl      vcs.VCS
-	MakeCluster  func(cluster.Runner, cluster.KindOptions) ClusterManager
-	MakeArgoCD   func(cluster.Runner, cluster.ArgoCDOptions) ArgoCDManager
-	MakeRenderer func(opts render.ArgoCDOptions) render.Renderer
-	Logger       *slog.Logger
+	Runner           cluster.Runner
+	DifferImpl       differ.Differ
+	VCSImpl          vcs.VCS
+	MakeCluster      func(cluster.Runner, cluster.KindOptions) ClusterManager
+	MakeArgoCD       func(cluster.Runner, cluster.ArgoCDOptions) ArgoCDManager
+	MakeArgoCDRender func(opts render.ArgoCDOptions) render.Renderer
+	MakeHelmRender   func(opts render.HelmOptions) render.Renderer
+	Logger           *slog.Logger
 }
 
 // ClusterManager is what the pipeline needs from the Kind wrapper.
@@ -72,9 +73,14 @@ func Run(ctx context.Context, cfg *config.Config, deps Deps) error {
 			return &cluster.ArgoCD{Runner: r, Opts: o}
 		}
 	}
-	if deps.MakeRenderer == nil {
-		deps.MakeRenderer = func(opts render.ArgoCDOptions) render.Renderer {
+	if deps.MakeArgoCDRender == nil {
+		deps.MakeArgoCDRender = func(opts render.ArgoCDOptions) render.Renderer {
 			return render.NewArgoCD(opts)
+		}
+	}
+	if deps.MakeHelmRender == nil {
+		deps.MakeHelmRender = func(opts render.HelmOptions) render.Renderer {
+			return render.NewHelm(opts)
 		}
 	}
 
@@ -147,49 +153,66 @@ func Run(ctx context.Context, cfg *config.Config, deps Deps) error {
 		return writeAndMaybePost(ctx, cfg, deps, report.Build(report.Input{Title: cfg.MarkdownTitle}, 0))
 	}
 
-	// 4. Cluster bring-up.
-	kind := deps.MakeCluster(deps.Runner, cluster.KindOptions{
-		Name:          cfg.ClusterName,
-		ReuseIfExists: cfg.ReuseCluster,
-		KeepOnExit:    cfg.KeepCluster,
-	})
-	if err := kind.Ensure(ctx); err != nil {
-		return fmt.Errorf("ensure kind: %w", err)
-	}
-	defer func() {
-		if err := kind.Teardown(ctx); err != nil {
-			logger.Warn("teardown", "err", err)
+	// 4. Build renderer. Default is offline `helm template` — fast, no
+	// cluster. --cluster-mode opts into the Kind + real-ArgoCD path.
+	var renderer render.Renderer
+	baseTreeDir, headTreeDir := baseDir, headDir
+	if cfg.ClusterMode {
+		kind := deps.MakeCluster(deps.Runner, cluster.KindOptions{
+			Name:          cfg.ClusterName,
+			ReuseIfExists: cfg.ReuseCluster,
+			KeepOnExit:    cfg.KeepCluster,
+		})
+		if err := kind.Ensure(ctx); err != nil {
+			return fmt.Errorf("ensure kind: %w", err)
 		}
-	}()
+		defer func() {
+			if err := kind.Teardown(ctx); err != nil {
+				logger.Warn("teardown", "err", err)
+			}
+		}()
 
-	kubeconfig, err := kind.Kubeconfig(ctx)
-	if err != nil {
-		return fmt.Errorf("get kubeconfig: %w", err)
-	}
-	kcPath := filepath.Join(workDir, "kubeconfig")
-	if err := os.WriteFile(kcPath, kubeconfig, 0o600); err != nil {
-		return err
-	}
+		kubeconfig, err := kind.Kubeconfig(ctx)
+		if err != nil {
+			return fmt.Errorf("get kubeconfig: %w", err)
+		}
+		kcPath := filepath.Join(workDir, "kubeconfig")
+		if err := os.WriteFile(kcPath, kubeconfig, 0o600); err != nil {
+			return err
+		}
+		if _, err := deps.Runner.Run(ctx, cluster.Command{
+			Name: "kubectl",
+			Args: []string{"--kubeconfig", kcPath, "config", "set-context", "--current", "--namespace", cfg.ArgoCDNamespace},
+		}); err != nil {
+			return fmt.Errorf("set kubeconfig namespace: %w", err)
+		}
 
-	argo := deps.MakeArgoCD(deps.Runner, cluster.ArgoCDOptions{
-		Namespace:      cfg.ArgoCDNamespace,
-		ChartVersion:   cfg.ArgoCDChartVersion,
-		KubeconfigPath: kcPath,
-	})
-	if err := argo.Install(ctx); err != nil {
-		return err
-	}
-	if err := argo.WaitForHealthy(ctx); err != nil {
-		return err
-	}
+		argo := deps.MakeArgoCD(deps.Runner, cluster.ArgoCDOptions{
+			Namespace:      cfg.ArgoCDNamespace,
+			ChartVersion:   cfg.ArgoCDChartVersion,
+			KubeconfigPath: kcPath,
+		})
+		if err := argo.Install(ctx); err != nil {
+			return err
+		}
+		if err := argo.WaitForHealthy(ctx); err != nil {
+			return err
+		}
 
-	// 5. Render + diff each affected app.
-	renderer := deps.MakeRenderer(render.ArgoCDOptions{
-		Runner:          deps.Runner,
-		KubeconfigPath:  kcPath,
-		ArgoCDNamespace: cfg.ArgoCDNamespace,
-		RepoURL:         repoURLFromGitHub(cfg.Repo),
-	})
+		renderer = deps.MakeArgoCDRender(render.ArgoCDOptions{
+			Runner:          deps.Runner,
+			KubeconfigPath:  kcPath,
+			ArgoCDNamespace: cfg.ArgoCDNamespace,
+			RepoURL:         repoURLFromGitHub(cfg.Repo),
+		})
+	} else {
+		renderer = deps.MakeHelmRender(render.HelmOptions{
+			Runner:      deps.Runner,
+			Namespace:   cfg.ArgoCDNamespace,
+			IncludeCRDs: true,
+			SkipTests:   true,
+		})
+	}
 
 	var reports []report.ChangeReport
 	for _, c := range affected {
@@ -205,7 +228,7 @@ func Run(ctx context.Context, cfg *config.Config, deps Deps) error {
 
 		var baseOut, headOut []byte
 		if c.Base != nil {
-			b, err := renderer.Render(ctx, *c.Base, baseHash.String())
+			b, err := renderer.Render(ctx, *c.Base, baseHash.String(), baseTreeDir)
 			if err != nil {
 				cr.RenderErr = "render base: " + err.Error()
 				reports = append(reports, cr)
@@ -214,7 +237,7 @@ func Run(ctx context.Context, cfg *config.Config, deps Deps) error {
 			baseOut = b
 		}
 		if c.Head != nil {
-			h, err := renderer.Render(ctx, *c.Head, headHash.String())
+			h, err := renderer.Render(ctx, *c.Head, headHash.String(), headTreeDir)
 			if err != nil {
 				cr.RenderErr = "render head: " + err.Error()
 				reports = append(reports, cr)

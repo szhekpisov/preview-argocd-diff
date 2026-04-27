@@ -45,6 +45,7 @@ type Config struct {
 	ReuseCluster       bool
 	KeepCluster        bool
 	ClusterName        string
+	ClusterMode        bool
 
 	// Diff.
 	DiffTool        string
@@ -95,6 +96,7 @@ func (c *Config) BindFlags(fs *pflag.FlagSet) {
 	fs.Bool("reuse-cluster", false, "Reuse an existing Kind cluster if present")
 	fs.Bool("keep-cluster", false, "Skip teardown of the Kind cluster after the run")
 	fs.String("cluster-name", "padp", "Kind cluster name")
+	fs.Bool("cluster-mode", false, "Use Kind + real ArgoCD instead of offline 'helm template' rendering")
 
 	fs.String("diff-tool", "builtin", "Diff tool: builtin, a command in $PATH, or an absolute path")
 	fs.String("diff-args", "", "Template passed to the external diff tool with {base} and {head} placeholders")
@@ -140,6 +142,7 @@ func (c *Config) Load(cmd *cobra.Command) error {
 	c.ReuseCluster = c.v.GetBool("reuse-cluster")
 	c.KeepCluster = c.v.GetBool("keep-cluster")
 	c.ClusterName = c.v.GetString("cluster-name")
+	c.ClusterMode = c.v.GetBool("cluster-mode")
 
 	c.DiffTool = c.v.GetString("diff-tool")
 	c.DiffArgs = c.v.GetString("diff-args")

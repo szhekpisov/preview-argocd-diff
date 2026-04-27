@@ -50,6 +50,7 @@ func TestArgoCDCapable(t *testing.T) {
 func TestArgoCDRenderAppliesAndFetches(t *testing.T) {
 	rr := &recRunner{out: map[string]string{
 		"argocd app manifests --core foo --revision abc123": "kind: ConfigMap\nmetadata:\n  name: rendered\n",
+		"argocd app get --core foo --hard-refresh":          "",
 	}}
 	r := NewArgoCD(ArgoCDOptions{
 		Runner:         rr,
@@ -68,7 +69,7 @@ func TestArgoCDRenderAppliesAndFetches(t *testing.T) {
 			},
 		},
 	}
-	out, err := r.Render(context.Background(), app, "abc123")
+	out, err := r.Render(context.Background(), app, "abc123", "")
 	if err != nil {
 		t.Fatalf("render: %v", err)
 	}
@@ -76,8 +77,8 @@ func TestArgoCDRenderAppliesAndFetches(t *testing.T) {
 		t.Errorf("unexpected manifests: %q", out)
 	}
 
-	if len(rr.calls) != 2 {
-		t.Fatalf("expected 2 calls, got %d: %+v", len(rr.calls), rr.calls)
+	if len(rr.calls) != 3 {
+		t.Fatalf("expected 3 calls (apply + refresh + manifests), got %d: %+v", len(rr.calls), rr.calls)
 	}
 	apply := rr.calls[0]
 	if apply.Name != "kubectl" || !strings.Contains(strings.Join(apply.Args, " "), "apply") {

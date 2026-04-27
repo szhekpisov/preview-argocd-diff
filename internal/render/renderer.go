@@ -1,6 +1,9 @@
 // Package render turns an Application / ApplicationSet doc into rendered
-// Kubernetes manifests for a given git ref. The MVP uses a live ArgoCD inside
-// a Kind cluster; a pure `helm template` renderer is planned for v0.3.
+// Kubernetes manifests for a given git ref. Two strategies are supported:
+//
+//   - Helm: offline `helm template` against a materialized tree (default).
+//   - ArgoCD: live ArgoCD in a Kind cluster, used when an Application's
+//     source can't be evaluated offline.
 package render
 
 import (
@@ -10,10 +13,12 @@ import (
 )
 
 // Renderer is the rendering strategy applied to one app + one ref.
+//
+// treeDir is the path to a materialized copy of the repo at ref, as produced
+// by git.Repo.Materialize. Offline renderers (Helm) read from it; cluster-mode
+// renderers (ArgoCD) ignore it.
 type Renderer interface {
-	// Render returns the rendered YAML as a byte slice, with multi-document
-	// separators preserved.
-	Render(ctx context.Context, app discover.Doc, ref string) ([]byte, error)
+	Render(ctx context.Context, app discover.Doc, ref, treeDir string) ([]byte, error)
 
 	// Capable reports whether this renderer can handle the given app. The
 	// returned reason is used in the PR report when the renderer declines.

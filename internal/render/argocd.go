@@ -62,8 +62,10 @@ func (r *ArgoCD) Capable(app discover.Doc) (bool, string) {
 }
 
 // Render applies a patched copy of the Application to the cluster and extracts
-// its rendered manifests at the provided ref.
-func (r *ArgoCD) Render(ctx context.Context, app discover.Doc, ref string) ([]byte, error) {
+// its rendered manifests at the provided ref. The treeDir argument is ignored
+// — cluster-mode rendering delegates to Argo CD's repo-server, which fetches
+// directly from the Application's repoURL.
+func (r *ArgoCD) Render(ctx context.Context, app discover.Doc, ref, _ string) ([]byte, error) {
 	if app.Kind == discover.KindApplicationSet {
 		// AppSet rendering requires cluster-side generator expansion plus
 		// retrieving each generated Application's manifests. Deferred to
@@ -79,6 +81,18 @@ func (r *ArgoCD) Render(ctx context.Context, app discover.Doc, ref string) ([]by
 		Stdin: bytes.NewReader([]byte(patched)),
 	}); err != nil {
 		return nil, fmt.Errorf("apply app %s: %w", app.Name, err)
+	}
+
+	// Force ArgoCD to pull the ref from the repo-server and populate its
+	// manifest cache. Without this, `argocd app manifests` races with the
+	// application-controller's first reconciliation and fails with
+	// "cache: key is missing".
+	if _, err := r.Opts.Runner.Run(ctx, cluster.Command{
+		Name: "argocd",
+		Args: []string{"app", "get", "--core", app.Name, "--hard-refresh"},
+		Env:  r.env(),
+	}); err != nil {
+		return nil, fmt.Errorf("argocd refresh %s: %w", app.Name, err)
 	}
 
 	res, err := r.Opts.Runner.Run(ctx, cluster.Command{
