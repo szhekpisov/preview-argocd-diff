@@ -45,7 +45,7 @@ func (noopArgoCD) WaitForHealthy(context.Context) error { return nil }
 type stubRenderer struct{}
 
 func (stubRenderer) Capable(discover.Doc) (bool, string) { return true, "" }
-func (stubRenderer) Render(_ context.Context, app discover.Doc, ref string) ([]byte, error) {
+func (stubRenderer) Render(_ context.Context, app discover.Doc, ref, _ string) ([]byte, error) {
 	return []byte("app: " + app.Name + "\nref: " + ref + "\n"), nil
 }
 
@@ -146,7 +146,8 @@ func pipelineDeps(vcsMock *fakeVCS) Deps {
 		MakeArgoCD: func(cluster.Runner, cluster.ArgoCDOptions) ArgoCDManager {
 			return noopArgoCD{}
 		},
-		MakeRenderer: func(render.ArgoCDOptions) render.Renderer { return stubRenderer{} },
+		MakeArgoCDRender: func(render.ArgoCDOptions) render.Renderer { return stubRenderer{} },
+		MakeHelmRender:   func(render.HelmOptions) render.Renderer { return stubRenderer{} },
 	}
 }
 
